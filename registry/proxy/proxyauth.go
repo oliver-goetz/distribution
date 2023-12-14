@@ -12,19 +12,28 @@ import (
 
 const challengeHeader = "Docker-Distribution-Api-Version"
 
-type userpass struct {
+type basicAuth struct {
 	username string
 	password string
 }
 
+func (b basicAuth) Basic(u *url.URL) (string, string) {
+	return b.username, b.password
+}
+
+func (b basicAuth) RefreshToken(u *url.URL, service string) string {
+	return ""
+}
+
+func (b basicAuth) SetRefreshToken(u *url.URL, service, token string) {
+}
+
 type credentials struct {
-	creds map[string]userpass
+	creds map[string]basicAuth
 }
 
 func (c credentials) Basic(u *url.URL) (string, string) {
-	up := c.creds[u.String()]
-
-	return up.username, up.password
+	return c.creds[u.String()].Basic(u)
 }
 
 func (c credentials) RefreshToken(u *url.URL, service string) string {
@@ -35,23 +44,25 @@ func (c credentials) SetRefreshToken(u *url.URL, service, token string) {
 }
 
 // configureAuth stores credentials for challenge responses
-func configureAuth(username, password, remoteURL string) (auth.CredentialStore, error) {
-	creds := map[string]userpass{}
+func configureAuth(username, password, remoteURL string) (auth.CredentialStore, auth.CredentialStore, error) {
+	creds := map[string]basicAuth{}
 
 	authURLs, err := getAuthURLs(remoteURL)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for _, url := range authURLs {
 		dcontext.GetLogger(dcontext.Background()).Infof("Discovered token authentication URL: %s", url)
-		creds[url] = userpass{
+		creds[url] = basicAuth{
 			username: username,
 			password: password,
 		}
 	}
 
-	return credentials{creds: creds}, nil
+	bs := basicAuth{username: username, password: password}
+
+	return credentials{creds: creds}, bs, nil
 }
 
 func getAuthURLs(remoteURL string) ([]string, error) {
